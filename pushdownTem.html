@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <title>NZME GAM Pushdown v1.3.4 - LIID: %eaid! | CID: %ecid!</title>
+  </head>
+  <body>
+    <script>
+      var nzmeads = parent.nzmeads;
+      var adIframeDoc = this.document;
+
+      /** Pushdown Mainclass */
+      function Pushdown() {
+        var t = this;
+
+        var sv = "%%PATTERN:sv%%";
+
+        /** Postm Vars */
+        t.video = "[%PushdownVideo%]";
+        t.image = "[%PushdownImage%]";
+        t.cta = "[%CTA%]";
+        t.logo = "[%Logo%]";
+        t.clickUrl = "%%CLICK_URL_UNESC%%[%ClickURL%]";
+        t.imptrk = "[%IMPTRK%]";
+        t.scriptUrl = "[%Script%]";
+        t.lineItemId = "%eaid!";
+
+        if (parent.hasOwnProperty("dfp_site")) {
+          t.site = parent.dfp_site;
+          t.isNZHSite = false;
+        } else {
+          t.site = "NZ Herald";
+          t.isNZHSite = true;
+        }
+
+        /** DOM Vars */
+        t.window_sY;
+        t.window_w;
+        t.main;
+        t.pd_div;
+        t.pd_clip;
+        t.pd_crtv;
+        t.pd_closebtn;
+        t.pd_down;
+        t.pd_logo_link;
+        t.pd_overlay_link;
+        t.main_w;
+        t.main_h;
+        t.main_x;
+        t.pd_view;
+        t.pd_cont = document.createElement("div");
+        t.pd_cont.setAttribute("id", "pd_div");
+        t.pd_appeared = false;
+
+        if (t.isNZHSite) {
+          t.pd_closeNavBtn =
+            sv === "1.0"
+              ? parent.document.getElementById("nav-toggle")
+              : parent.document.querySelector(
+                  ".header__navigation-toggle-button"
+                );
+        } else if (t.site === "driven") {
+          t.drivenNav = parent.document.querySelector(".header-search-widget");
+          t.drivenNavCoords;
+        }
+
+        /** Generates Markup template and returns as an HTML object */
+        t._getMarkupTemplate = function () {
+          var parser = new DOMParser();
+
+          var m = "";
+          m += '	<div id="pd_controls">';
+          m += '		<div id="pd_closebtn"></div>';
+          //Video controls go inside here
+          m += "	</div>";
+          m += '	<div id="pd_logo">';
+          m +=
+            '		<a target="_blank" href="' +
+            t.clickUrl +
+            '"><img src="' +
+            t.logo +
+            '"></a>';
+          m += "	</div>";
+          m += '	<div id="pd_overlay">';
+          m +=
+            '		<a target="_blank" href="' +
+            t.clickUrl +
+            '"><img src="' +
+            t.cta +
+            '"></a>';
+          m += "	</div>";
+          m += '	<div id="pd_up">';
+          m += '		<span id="pd_uptext">ADVERTISEMENT</span>';
+          m += "	</div>";
+          m += '	<div id="pd_down">';
+          m += '		<div id="pd_downarrow">';
+          m += '			<a href="#">';
+          m += '				<span id="pd_bottom"></span>';
+          m += "			</a>";
+          m += "		</div>";
+          m += "		<br>";
+          m +=
+            '		<span id="pd_downtext">CONTINUE TO ' +
+            t.site.toUpperCase() +
+            "</span>";
+          m += "	</div>";
+          m += '	<div id="pd_shadow"></div>';
+          m += '	<div id="pd_clip">';
+          m += '		<div id="pd_crtv" style="display: block;">';
+          //Creative goes here
+          m += "		</div>";
+          m += "	</div>";
+
+          var markup = parser.parseFromString(m, "text/html");
+          return markup;
+        };
+
+        /** Injects markup into Pushdown HTML container */
+        t._generateFinalMarkup = function (markup) {
+          t.pd_cont.innerHTML = markup;
+        };
+
+        /** Adds event listeners for window resize and close buttons */
+        t._addEventListeners = function () {
+          parent.window.addEventListener("resize", t._adjustContainer);
+          t.pd_closebtn.addEventListener("click", t._removePushdown);
+          t.pd_down.addEventListener("click", t._removePushdown);
+
+          t.pd_logo_link.addEventListener("click", t._clickTrack);
+          t.pd_overlay_link.addEventListener("click", t._clickTrack);
+
+          if (t.isNZHSite) {
+            t.pd_closeNavBtn.addEventListener("click", t.handleNavOpenAndClose);
+          }
+        };
+
+        /** Removes event listeners for window resize and close buttons */
+        t._removeEventListeners = function () {
+          t.pd_closebtn.removeEventListener("click", t._removePushdown);
+          t.pd_down.removeEventListener("click", t._removePushdown);
+          parent.window.removeEventListener("resize", t._adjustContainer);
+
+          t.pd_logo_link.removeEventListener("click", t._clickTrack);
+          t.pd_overlay_link.removeEventListener("click", t._clickTrack);
+
+          if (t.isNZHSite) {
+            t.pd_closeNavBtn.removeEventListener(
+              "click",
+              t.handleNavOpenAndClose
+            );
+          }
+        };
+
+        /**
+         * 1. Injects final Pushdown markup into page in #main
+         * 2. Assigns selectors to DOM vars
+         * 3. Calculates width, height and positioning of #main
+         * 4. Runs _addEventListeners
+         */
+        t._addToDOM = function () {
+          var selector;
+          if (t.isNZHSite) {
+            t.main = parent.document.getElementById("main");
+          } else {
+            selector = ".main-container";
+            t.main = parent.document.querySelector(selector);
+          }
+
+          if (!t.main) {
+            nzmeads.tools.log(
+              "Pushdown ERROR: selector ",
+              selector,
+              " not found"
+            );
+            return false;
+          }
+
+          t.main.insertBefore(t.pd_cont, t.main.firstChild);
+
+          t.pd_div = parent.document.getElementById("pd_div");
+          t.pd_clip = parent.document.getElementById("pd_clip");
+          t.pd_crtv = parent.document.getElementById("pd_crtv");
+          t.pd_closebtn = parent.document.getElementById("pd_closebtn");
+          t.pd_down = parent.document.getElementById("pd_down");
+
+          t.pd_logo_link = parent.document.querySelector("#pd_logo a");
+          t.pd_overlay_link = parent.document.querySelector("#pd_overlay a");
+
+          t.main_w = t.main.offsetWidth;
+          t.main_h = t.main_w / 1.78;
+          t.main_x = t.main.getBoundingClientRect();
+
+          t.main_x = t.main_x.left;
+
+          t._addEventListeners();
+        };
+
+        /**
+         * 1. Shows the Pushdown div
+         * 2. Adjusts the Pushdown div according to #main's width
+         * 3. Injects a beacon to indicate creative has rendered
+         */
+        t._showPushdown = function () {
+          t.pd_div.style.display = "block";
+          t._adjustContainer();
+          if (t.isNZHSite) {
+            t.pd_div.style.opacity = "1";
+            // Driven
+          } else {
+            // Disabled as some clients were complaining about it
+            // var initialPdViewability = (parent.window.innerHeight - t.pd_div.getBoundingClientRect().top)/t.main_h
+            // t.pd_div.style.opacity = initialPdViewability;
+          }
+
+          nzmeads.tools.dropPixel(
+            nzmeads.tools.generateEventTrackerURL(
+              "pushdown",
+              "view",
+              t.lineItemId
+            ),
+            adIframeDoc,
+            true
+          );
+          if (t.scriptUrl) {
+            nzmeads.tools.loadScript(t.scriptUrl, t.pd_div);
+          }
+        };
+
+        /** Drops pixel to track clicks from Pushdown assets */
+        t._clickTrack = function () {
+          nzmeads.tools.dropPixel(
+            nzmeads.tools.generateEventTrackerURL(
+              "pushdown",
+              "click",
+              t.lineItemId
+            ),
+            adIframeDoc,
+            true
+          );
+        };
+
+        /** Sets viewability and opacity of the Pushdown div */
+        t._checkScroll = function () {
+          t.pd_view = parent.viewability.vertical(t.pd_div);
+          t.pd_view = t.pd_view["value"];
+
+          var coords = t.pd_div.getBoundingClientRect();
+
+          if (coords.top <= 0) {
+            t.pd_crtv.style.top = "0px";
+          } else {
+            t.pd_crtv.style.top = coords.top + "px";
+          }
+
+          t.window_sY = parent.pageYOffset;
+        };
+
+        /**
+         * 1. Adjusts the Pushdown div according to #main's width
+         */
+        t._adjustContainer = function () {
+          t.main_w = t.main.offsetWidth;
+          t.main_h = t.main_w / 1.78;
+          t.main_x = t.main.getBoundingClientRect();
+          t.main_x = t.main_x.left;
+
+          t.pd_div.style.height = t.main_h + "px";
+          t.pd_clip.style.height = t.main_h + "px";
+          t.pd_crtv.style.height = t.main_h + "px";
+
+          t.pd_clip.style.width = t.main_w + "px";
+          t.pd_crtv.style.width = t.main_w + "px";
+
+          t.pd_crtv.style.left = t.main_x + "px";
+
+          t.window_w = parent.innerWidth;
+        };
+
+        /**
+         * 1. Sets height of Pushdown div to 0
+         * 2. Injects a beacon to indicate creative has been closed
+         * 3. Removes event listeners
+         */
+        t._removePushdown = function () {
+          t.pd_div.style.height = "0px";
+          t.pd_clip.style.height = "0px";
+          nzmeads.tools.dropAdvertiserIdCookie("pdClosed", "%eadv!");
+          nzmeads.tools.dropPixel(
+            nzmeads.tools.generateEventTrackerURL(
+              "pushdown",
+              "close",
+              t.lineItemId
+            ),
+            adIframeDoc,
+            true
+          );
+          t._removeEventListeners();
+        };
+
+        /** Adjusts pushdown container when the NZH navbar is opened/closed. Timeout is needed to account for animation */
+        t.handleNavOpenAndClose = function () {
+          setTimeout(function () {
+            t._adjustContainer();
+          }, 350);
+        };
+
+        /** Adds the Pushdown CSS to <head>, executes on init */
+        nzmeads.tools.loadCSS("https://nzme-ads.co.nz/css/pushdown.css");
+      }
+
+      /** PushdownVideo Subclass */
+      function PushdownVideo() {
+        Pushdown.call(this);
+
+        var t = this;
+
+        /** Video Vars */
+        var pd_video;
+        var pd_videoClick;
+        var pd_rdy;
+        var pd_video_rdy;
+        var pd_hasplayed;
+        var pd_volumebtn;
+        var pd_mutebtn;
+        var pd_unmutebtn;
+        var pd_firstRun = true;
+        var pd_overlay;
+        var pd_logo;
+
+        var firstplay = true;
+        var firstend = true;
+        var soundUnmuted = false;
+
+        var vctime, vdur, vprc;
+        var vtime25 = false;
+        var vtime50 = false;
+        var vtime75 = false;
+        var vtime100 = false;
+        var vtime5sec = false;
+
+        /**
+         * 1. Get markup template
+         * 2. Create and insert volume control markup into template after close button
+         * 3. Create and insert video player markup into template inside #pd_crtv
+         * 4. Inject markup into Pushdown HTML container
+         */
+        t.generateVideoMarkup = function () {
+          var markupTemplate = t._getMarkupTemplate();
+
+          //Video Controls - placed after #pd_closebtn
+          var controlsMarkup = "";
+          controlsMarkup += '<div id="pd_volumebtn">';
+          controlsMarkup +=
+            ' <img id="pd_mutebtn" src="https://nzme-ads.co.nz/img/mute.png">';
+          controlsMarkup +=
+            ' <img id="pd_unmutebtn" src="https://nzme-ads.co.nz/img/vol.png">';
+          controlsMarkup += "</div>";
+
+          var tar = markupTemplate.querySelector("#pd_closebtn");
+          tar.insertAdjacentHTML("afterend", controlsMarkup);
+
+          //Video Creative - placed inside #pd_crtv
+          var crtvMarkup = "";
+          crtvMarkup +=
+            '<a id="pd_videoClick" target="_blank" href="' + t.clickUrl + '">';
+          crtvMarkup +=
+            '  <video id="pd_video" class="video-js" playsinline preload loop muted poster="' +
+            t.image +
+            '" data-setup="{}" width="100%" height="100%">';
+          crtvMarkup += '    <source src="' + t.video + '" type="video/mp4">';
+          crtvMarkup += "  </video>";
+          crtvMarkup += "</a>";
+
+          tar = markupTemplate.querySelector("#pd_crtv");
+          tar.insertAdjacentHTML("afterbegin", crtvMarkup);
+
+          var output = markupTemplate.body.innerHTML;
+
+          t._generateFinalMarkup(output);
+        };
+
+        /** Assigns selectors and values to video vars */
+        t.initVideoElements = function () {
+          pd_video = videojs(parent.document.querySelector("#pd_video"));
+          pd_rdy = false;
+          pd_video_rdy = false;
+          pd_hasplayed = false;
+          pd_videoClick = parent.document.getElementById("pd_videoClick");
+          pd_volumebtn = parent.document.getElementById("pd_volumebtn");
+          pd_mutebtn = parent.document.getElementById("pd_mutebtn");
+          pd_unmutebtn = parent.document.getElementById("pd_unmutebtn");
+          pd_logo = parent.document.getElementById("pd_logo");
+          pd_overlay = parent.document.getElementById("pd_overlay");
+        };
+
+        // Pauses video when user click-through
+        t.videoClickThrough = function () {
+          pd_video.pause();
+        };
+
+        /**
+         * 1. Set on videojs ready function
+         * 2. Set ontime update function -> injects tracking pixels to reflect video playback progress
+         * 3. Adds event listeners to volume & close buttons and on window scroll
+         * 4. Indicates video is ready
+         */
+        t.onVideoReady = function () {
+          videojs("pd_video").ready(function () {
+            var timeEvent = function () {
+              var vctime = Math.round(pd_video.currentTime());
+              var vdur = Math.round(pd_video.duration());
+              var vprc = Math.round((vctime / vdur) * 100);
+
+              if (!vtime25) {
+                if (vprc >= 25) {
+                  vtime25 = true;
+                  nzmeads.tools.dropPixel(
+                    nzmeads.tools.generateEventTrackerURL(
+                      "pushdown",
+                      "video1q",
+                      t.lineItemId
+                    ),
+                    adIframeDoc,
+                    true
+                  );
+                }
+              }
+              if (!vtime50) {
+                if (vprc >= 50) {
+                  vtime50 = true;
+                  nzmeads.tools.dropPixel(
+                    nzmeads.tools.generateEventTrackerURL(
+                      "pushdown",
+                      "video2q",
+                      t.lineItemId
+                    ),
+                    adIframeDoc,
+                    true
+                  );
+                }
+              }
+              if (!vtime75) {
+                if (vprc >= 75) {
+                  vtime75 = true;
+                  nzmeads.tools.dropPixel(
+                    nzmeads.tools.generateEventTrackerURL(
+                      "pushdown",
+                      "video3q",
+                      t.lineItemId
+                    ),
+                    adIframeDoc,
+                    true
+                  );
+                }
+              }
+              if (!vtime100) {
+                if (vprc >= 100) {
+                  vtime100 = true;
+                  nzmeads.tools.dropPixel(
+                    nzmeads.tools.generateEventTrackerURL(
+                      "pushdown",
+                      "video4q",
+                      t.lineItemId
+                    ),
+                    adIframeDoc,
+                    true
+                  );
+                }
+              }
+            };
+
+            pd_video.on("timeupdate", timeEvent);
+
+            pd_video.on("firstplay", function () {
+              if (firstplay) {
+                nzmeads.tools.dropPixel(
+                  nzmeads.tools.generateEventTrackerURL(
+                    "pushdown",
+                    "videostart",
+                    t.lineItemId
+                  ),
+                  adIframeDoc,
+                  true
+                );
+                if (t.imptrk) {
+                  nzmeads.tools.dropPixel(t.imptrk, adIframeDoc);
+                }
+                firstplay = false;
+              }
+            });
+
+            t.addPushdownVideoEvents();
+
+            pd_video_rdy = true;
+          });
+        };
+
+        /** Toggles between mute / unmute and displays correct icon */
+        t.videoSoundToggle = function () {
+          if (pd_video.muted() == true) {
+            if (soundUnmuted == false) {
+              soundUnmuted = true;
+              nzmeads.tools.dropPixel(
+                nzmeads.tools.generateEventTrackerURL(
+                  "pushdown",
+                  "soundon",
+                  t.lineItemId
+                ),
+                adIframeDoc,
+                true
+              );
+            }
+
+            pd_video.muted(false);
+            pd_unmutebtn.style.display = "inline-block";
+            pd_mutebtn.style.display = "none";
+          } else if (pd_video.muted() == false) {
+            pd_video.muted(true);
+            pd_unmutebtn.style.display = "none";
+            pd_mutebtn.style.display = "inline-block";
+          }
+        };
+
+        /** Plays the video if it is ready and indicates that it has played if so */
+        t.videoPlay = function () {
+          if (pd_video_rdy == true) {
+            pd_video.play();
+            pd_hasplayed = true;
+          }
+        };
+
+        /**
+         * 1. Fires main checkscroll function
+         * 2. If Pushdown has not played and is within view -> Show Pushdown and play video and scroll to 100% view
+         * 3. If video has played and is not in view and is not the first run -> mute video and hide Pushdown
+         * 4. If view is in view -> play video
+         */
+        t.videoCheckScroll = function () {
+          t._checkScroll();
+
+          if (
+            t.window_sY < t.main_h &&
+            pd_hasplayed == false &&
+            pd_video_rdy == true
+          ) {
+            t._showPushdown();
+            t.videoPlay();
+            parent.window.scrollTo(0, 0);
+          }
+
+          if (
+            pd_hasplayed == true &&
+            t.pd_view <= 0.29 &&
+            pd_firstRun == false
+          ) {
+            pd_video.muted(true);
+            pd_unmutebtn.style.display = "none";
+            pd_mutebtn.style.display = "inline-block";
+            pd_video.pause();
+          }
+
+          if (t.pd_view >= 0.3) {
+            t.videoPlay();
+          }
+
+          pd_firstRun = false;
+        };
+
+        /** Add event listeners for volume, close buttons and window scroll */
+        t.addPushdownVideoEvents = function () {
+          // Uncommented as I'm not sure how this contributes to the code
+          // if (!t.isNZHSite && "onwheel" in document.createElement("div")) {
+          // 	parent.window.addEventListener("wheel", t.videoCheckScroll);
+          // }
+
+          parent.window.addEventListener("scroll", t.videoCheckScroll);
+
+          pd_volumebtn.addEventListener("click", t.videoSoundToggle);
+
+          t.pd_logo_link.addEventListener("click", t.videoClickThrough);
+          t.pd_overlay_link.addEventListener("click", t.videoClickThrough);
+          pd_videoClick.addEventListener("click", t.videoClickThrough);
+          pd_videoClick.addEventListener("click", t._clickTrack);
+
+          t.pd_closebtn.addEventListener("click", t.removePushdownVideo);
+          t.pd_down.addEventListener("click", t.removePushdownVideo);
+        };
+
+        /**
+         * 1. Pause video
+         * 2. Remove event listeners for volume, close buttons and window scrollview
+         */
+        t.removePushdownVideo = function () {
+          pd_video.pause();
+
+          parent.window.removeEventListener("scroll", t.videoCheckScroll);
+
+          pd_volumebtn.removeEventListener("click", t.videoSoundToggle);
+
+          t.pd_logo_link.removeEventListener("click", t.videoClickThrough);
+          t.pd_overlay_link.removeEventListener("click", t.videoClickThrough);
+          pd_videoClick.removeEventListener("click", t.videoClickThrough);
+          pd_videoClick.removeEventListener("click", t._clickTrack);
+
+          t.pd_closebtn.removeEventListener("click", t.removePushdownVideo);
+          t.pd_down.removeEventListener("click", t.removePushdownVideo);
+        };
+
+        /** Run functions and delay checkscroll (viewability.js workaround) */
+        t.initPushdownVideo = function () {
+          t.generateVideoMarkup();
+          t._addToDOM();
+          t.initVideoElements();
+          t.onVideoReady();
+
+          setTimeout(function () {
+            t.videoCheckScroll();
+            t._checkScroll();
+          }, 500);
+        };
+
+        /**
+         * Load video-js and viewability.js scripts
+         * Nested callbacks as the scripts are essential for the rest of the pushdown logic
+         */
+        nzmeads.tools.loadCSS("//vjs.zencdn.net/5.8.8/video-js.css");
+        nzmeads.tools.loadScript(
+          "//vjs.zencdn.net/4.7.1/video.js",
+          adIframeDoc.querySelector("head"),
+          function () {
+            nzmeads.tools.loadScript(
+              "//cdn.jsdelivr.net/viewability/latest/viewability.min.js",
+              parent.document.getElementById("%%PATTERN:container_id%%"),
+              t.initPushdownVideo
+            );
+          }
+        );
+      }
+
+      /** PushdownStatic Subclass */
+      function PushdownStatic() {
+        Pushdown.call(this);
+
+        var t = this;
+        var pd_imageClick;
+
+        /**
+         * 1. Get markup template
+         * 2. Create and insert static creative markup into template inside #pd_crtv
+         * 3. Inject markup into Pushdown HTML container
+         */
+        t.generateStaticMarkup = function () {
+          var markupTemplate = t._getMarkupTemplate();
+
+          var crtvMarkup = "";
+          crtvMarkup +=
+            '<a id="pd_imageClick" href="' +
+            t.clickUrl +
+            '" target="_blank"><img src="' +
+            t.image +
+            '" style="width:100%;"></a>';
+
+          var tar = markupTemplate.querySelector("#pd_crtv");
+          tar.insertAdjacentHTML("afterbegin", crtvMarkup);
+
+          var output = markupTemplate.body.innerHTML;
+
+          t._generateFinalMarkup(output);
+        };
+
+        /**
+         * 1. Fires main checkscroll function
+         * 2. If Pushdown has not appeared yet and is within view -> Show Pushdown=
+         */
+        t.staticCheckScroll = function () {
+          t._checkScroll();
+
+          if (t.window_sY < t.main_h && t.pd_appeared == false) {
+            t._showPushdown();
+            parent.window.scrollTo(0, 0);
+            t.pd_appeared = true;
+            if (t.imptrk) {
+              nzmeads.tools.dropPixel(t.imptrk, adIframeDoc);
+            }
+          }
+        };
+
+        /** Add event listeners for close buttons and window scrollview */
+        t.addPushdownStaticEvents = function () {
+          parent.window.addEventListener("scroll", t.staticCheckScroll);
+          pd_imageClick.addEventListener("click", t._clickTrack);
+          t.pd_closebtn.addEventListener("click", t.removePushdownStatic);
+          t.pd_down.addEventListener("click", t.removePushdownStatic);
+        };
+
+        /** Remove event listeners for close buttons and window scrollview */
+        t.removePushdownStatic = function () {
+          pd_imageClick.removeEventListener("click", t._clickTrack);
+          t.pd_closebtn.removeEventListener("click", t.removePushdownStatic);
+          t.pd_down.removeEventListener("click", t.removePushdownStatic);
+          parent.window.removeEventListener("scroll", t.staticCheckScroll);
+        };
+
+        /** Run functions and delay checkscroll (viewability.js workaround) */
+        t.initPushdownStatic = function () {
+          t.generateStaticMarkup();
+          t._addToDOM();
+          pd_imageClick = parent.document.getElementById("pd_imageClick");
+
+          t.addPushdownStaticEvents();
+
+          setTimeout(function () {
+            t.staticCheckScroll();
+            t._checkScroll();
+          }, 500);
+        };
+
+        nzmeads.tools.loadScript(
+          "//cdn.jsdelivr.net/viewability/latest/viewability.min.js",
+          parent.document.getElementById("%%PATTERN:container_id%%"),
+          t.initPushdownStatic.bind(t)
+        );
+      }
+
+      nzmeads.tools.closeAdSpot("%%PATTERN:container_id%%");
+
+      /** Determine whether to run video or static based on ad response data */
+      if (!"[%PushdownVideo%]") {
+        PushdownStatic.prototype = Object.create(Pushdown.prototype);
+        PushdownStatic.prototype.constructor = PushdownStatic;
+        var pushdownStatic = new PushdownStatic();
+      } else {
+        PushdownVideo.prototype = Object.create(Pushdown.prototype);
+        PushdownVideo.prototype.constructor = PushdownVideo;
+        var pushdownVideo = new PushdownVideo();
+      }
+    </script>
+    [%EXTRA%]
+  </body>
+</html>
