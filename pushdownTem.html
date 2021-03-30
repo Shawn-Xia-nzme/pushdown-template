@@ -50,6 +50,7 @@
         t.pd_cont = document.createElement("div");
         t.pd_cont.setAttribute("id", "pd_div");
         t.pd_appeared = false;
+        t.pd_calling_num = 0;
 
         if (t.isNZHSite) {
           t.pd_closeNavBtn =
@@ -252,6 +253,29 @@
           }
 
           t.window_sY = parent.pageYOffset;
+        };
+
+        /** Check true skin for rendering pushdown in correct position */
+        t.adjustPosition = function () {
+          var isTrueSkin = parent.document.getElementsByClassName(
+            "bz-ad-container bz-format-desktop_truskin"
+          )[0];
+
+          if (!isTrueSkin && t.pd_calling_num <= 5) {
+            nzmeads.tools.log("pushdown temp is looking for truskin");
+            t.pd_calling_num++;
+            setTimeout(arguments.callee, 500); // call adjustPosition again in 500 msecs
+          } else if (isTrueSkin) {
+            parent.document.getElementById("pd_crtv").style.top = "315px";
+          } else if (t.pd_calling_num > 5) {
+            nzmeads.tools.log(
+              "pushdown temp run out of chances to look for truskin"
+            );
+          } else {
+            nzmeads.tools.log(
+              "pushdown temp something wrong in adjustPosition method"
+            );
+          }
         };
 
         /**
@@ -615,6 +639,7 @@
           setTimeout(function () {
             t.videoCheckScroll();
             t._checkScroll();
+            t.adjustPosition();
           }, 500);
         };
 
@@ -711,6 +736,7 @@
           setTimeout(function () {
             t.staticCheckScroll();
             t._checkScroll();
+            t.adjustPosition();
           }, 500);
         };
 
